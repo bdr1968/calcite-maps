@@ -15,12 +15,25 @@
 	<!-- ArcGIS JS 3.x -->
 	<link rel="stylesheet" href="https://js.arcgis.com/3.16/esri/themes/calcite/dijit/calcite.css">
 	<link rel="stylesheet" href="https://js.arcgis.com/3.16/esri/themes/calcite/esri/esri.css">
-					
+	
+	<link href="https://fonts.googleapis.com/css?family=Roboto:500,400,700" rel="stylesheet" type="text/css">				
 	<style>
 		html, body {
 			margin: 0;
 			padding: 0;
 			height: 100%;
+		}
+		.nav-navy {
+			background-color: navy;
+			background: url("http://gis.transportation.wv.gov/Park_And_Ride/images/header.png");
+			background-position: -100px, 0;
+		}
+		.navbar-title, .navbar-subtitle {
+			font-family: Roboto;
+			color: #4f5978;
+		}
+		.glyphicon {
+			color: #4f5978;
 		}
 	</style>
 </head>
@@ -29,7 +42,7 @@
 
 		<!-- Navbar -->
 
-		<nav class="navbar navbar-text-light navbar-fixed-top calcite-dark-purple">
+		<nav class="navbar navbar-text-light navbar-fixed-top nav-navy">
 				<div class="container-fluid">
 						<div class="navbar-header">
 								<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#mainNav" aria-expanded="false">
@@ -42,8 +55,8 @@
 										<span class="esri-icon esri-icon-map-pin"></span>
 								</a>
 								<div class="navbar-info">
-										<div class="navbar-title text-overflow">Calcite Maps</div>
-										<div class="navbar-subtitle text-overflow">A modern framework for designing map apps (ArcGIS JS 3.x)</div> 
+										<div class="navbar-title text-overflow">Park and Ride Locations</div>
+										<div class="navbar-subtitle text-overflow">Designated by the West Virginia DOT</div> 
 								</div>
 						</div>
 						<!-- Navbar collapse -->
@@ -121,13 +134,7 @@
 																		<div class="panel-body">
 																						<select id="selectBasemapPanel" class="form-control">
 																										<option value="streets" data-vector="vector-streets">Streets</option>
-																										<option value="satellite" data-vector="satellite">Satellite</option>
-																										<option value="hybrid" data-vector="hybrid">Hybrid</option>
-																										<option value="national-geographic" data-vector="national-geographic">National Geographic</option>
-																										<option value="topo" data-vector="vector-streets-relief">Topographic</option>
-																										<option value="gray" data-vector="vector-canvas-light">Gray</option>
-																										<option value="dark-gray" data-vector="vector-canvas-dark">Dark Gray</option>
-																										<option value="osm" data-vector="osm">Open Street Map</option>
+																																																				<option value="hybrid" data-vector="hybrid">Hybrid</option>																	
 																										<option value="dark-gray" data-vector="vector-streets-night">Streets Night</option>
 																										<option value="streets" data-vector="vector-streets-mobile">Streets Mobile</option>
 																						</select>
@@ -157,10 +164,13 @@
 
 		<script>
 
-				var map, searchWidgetNav, searchWidgetPanel, activeView;
+				var map, searchWidgetNav, searchWidgetPanel, activeView, bounds;
 
 				require(["esri/map",
-								"esri/dijit/Search",
+								"esri/dijit/Search", 
+								"esri/geometry/Extent",
+								"esri/layers/FeatureLayer",
+								"esri/symbols/PictureMarkerSymbol",
 								"dojo/query",
 
 								"bootstrap/Collapse", 
@@ -171,16 +181,38 @@
 								"calcite-maps/calcitemaps",
 								
 								"dojo/domReady!"
-				], function(Map, Search, query) {
+				], function(Map, Search, Extent, FeatureLayer, PictureMarkerSymbol, query) {
+								//Defaul extent
+								bounds = new Extent({
+									"xmin" : -9742743.915715458,
+									"ymin" : 4085284.90221511,
+									"xmax" : -8072136.225515089,
+									"ymax" : 5063678.864265107,
+									"spatialReference" : {
+										"wkid" : 102100
+									}
+								});
+								//var pnrLayer = new FeatureLayer("http://gis.transportation.wv.gov/arcgis/rest/services/GIS_DATA_WM/Transportation/MapServer/6");
 								
 								// Map 
 								map = new Map("mapViewDiv", {
-												basemap: "dark-gray",
-												center: [-40, 40], // lon, lat
-												zoom: 3
+												basemap: "streets-vector",
+												extent: bounds
 								});
 								//map.popup.anchor = "top";
-					
+								//map.addLayer(pnrLayer);
+								map.addLayer(stateLayer());
+								function stateLayer() {
+									var IPStates = new esri.layers.ImageParameters();
+									IPStates.layerIds = [14];
+									IPStates.layerOption = esri.layers.ImageParameters.LAYER_OPTION_SHOW;
+									var States = new esri.layers.ArcGISDynamicMapServiceLayer("http://gis.transportation.wv.gov/arcgis/rest/services/GIS_DATA_WM/Boundaries/MapServer/", {
+										id : "US_States",
+										opacity: .7,
+										"imageParameters": IPStates
+									});
+									return States;
+								}
 								// Search
 								searchDivNav = createSearchWidget("searchNavDiv");
 								searchWidgetPanel = createSearchWidget("searchPanelDiv");
@@ -203,6 +235,44 @@
 								query("#selectBasemapPanel").on("change", function(e){
 												map.setBasemap(e.target.options[e.target.selectedIndex].value);
 								});
+								map.on("load", doQueries);
+								function doQueries(map) {
+									var parkAndRideQueryTask = new esri.tasks.QueryTask("http://gis.transportation.wv.gov/arcgis/rest/services/GIS_DATA_WM/Transportation/MapServer/6");
+									var parkAndRideQuery = new esri.tasks.Query();
+									parkAndRideQuery.outFields = ["*"];
+									parkAndRideQuery.returnGeometry = true;
+									parkAndRideQuery.outSpatialReference = map.spatialReference;
+									parkAndRideQuery.where = "Type='Designated'";
+									parkAndRideQueryTask.execute(parkAndRideQuery, addParkAndRideFeaturesToMap);
+								}
+								function addParkAndRideFeaturesToMap(featureSet) {
+		//var symbol = new esri.symbol.SimpleMarkerSymbol();
+		//symbol.setColor(new dojo.Color([0,0,255]));
+		var symbol = new PictureMarkerSymbol({
+				"angle" : 0,
+				"xoffset" : 0,
+				"yoffset" : 0,
+				"type" : "esriPMS",
+				"url" : "http://static.arcgis.com/images/Symbols/Transportation/Parking.png",
+				"imageData" : "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",
+				"contentType" : "image/png",
+				"width" : 24,
+				"height" : 24
+			});
+
+		var parkandrideLayer = new esri.layers.GraphicsLayer();
+		var template = new esri.InfoTemplate();
+		template.setTitle("<b>${Name}</b>");
+		template.setContent('${County} county<br />${Location}<br/>Route: ${Rt_Label}<br />Spaces: ${Spaces}<br />Lighting: ${Lighting}<br />Fencing: ${Fencing}<br />Benches: ${Benches}<br />Shelter: ${Shelter}<br /><a href="${Exhibit}">Click for Diagram</a>');
+		parkandrideLayer.setInfoTemplate(template);
+		map.addLayer(parkandrideLayer);
+
+		map.reorderLayer(parkandrideLayer, 0);
+
+		dojo.forEach(featureSet.features, function (feature) {
+			parkandrideLayer.add(feature.setSymbol(symbol));
+		});
+	}
 				});// dojo
 		</script>
 

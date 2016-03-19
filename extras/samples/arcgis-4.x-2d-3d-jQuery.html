@@ -153,25 +153,36 @@
 
   <script>
 
-    var app, mapView, sceneView, searchWidgetNav, searchWidgetPanel, activeView;
+    var app, bounds, mapView, sceneView, searchWidgetNav, searchWidgetPanel, activeView;
 
     require([
       // ArcGIS
       "esri/Map",
       "esri/Basemap",
+	  "esri/geometry/Extent",
+	  "esri/layers/FeatureLayer",
       "esri/views/MapView",
       "esri/views/SceneView",
       "esri/widgets/Search",
       "esri/core/watchUtils",
       "dojo/query",
       "dojo/domReady!"
-    ], function(Map, Basemap, MapView, SceneView, Search, watchUtils, query) {
-        
+    ], function(Map, Basemap, Extent, FeatureLayer, MapView, SceneView, Search, watchUtils, query) {
+        bounds = new Extent({
+									"xmin" : -9742743.915715458,
+									"ymin" : 4085284.90221511,
+									"xmax" : -8072136.225515089,
+									"ymax" : 5063678.864265107,
+									"spatialReference" : {
+										"wkid" : 102100
+									}
+								});
       // App
       app = {
         scale: 50000000,
         center: [-40,40],
-        basemap: "satellite",
+        basemap: "streets",
+		extent: bounds,
         viewPadding: {
             bottom: 64
         },
@@ -180,13 +191,16 @@
         },
         activeView: null
       };
-
+	  var layer = new FeatureLayer();
+	  layer.url = "http://gis.transportation.wv.gov/arcgis/rest/services/GIS_DATA_WM/Transportation/MapServer/6";
       // Map 
       var map = new Map({
-        basemap: app.basemap
+        basemap: app.basemap,
+		layers: [layer]
       });
       mapView = new MapView({
         container: "mapViewDiv",
+		extent: app.extent,
         map: map,
         scale: app.scale,
         center: app.center,
